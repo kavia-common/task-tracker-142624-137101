@@ -2,8 +2,10 @@
   "name": "frontend",
   "version": "0.1.0",
   "private": true,
-  "dependencies": {},
+  "scripts": {
+    "test": "react-scripts test"
+  },
   "devDependencies": {
-    "@testing-library/jest-dom": "^6.0.0"
+    "@testing-library/jest-dom": "^6.6.4"
   }
 }
