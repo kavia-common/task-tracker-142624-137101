@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "start": "nodemon server.js",
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "test": "jest"
   },
   "dependencies": {
     "express": "^4.18.2",
