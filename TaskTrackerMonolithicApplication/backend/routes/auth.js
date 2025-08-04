@@ -76,6 +76,17 @@ router.post("/register", validateRegistration, async (req, res) => {
       token,
     });
   } catch (err) {
+    // Custom error message for Mongoose validation
+    if (err.name === "ValidationError" && err.errors) {
+      // Aggregate all validation messages
+      const messages = Object.values(err.errors).map(e => e.message);
+      return res.status(400).json({ message: messages.join(" | ") });
+    }
+    // Duplicate key error (race condition/fallback)
+    if (err.code === 11000 && err.keyPattern && err.keyPattern.email) {
+      return res.status(400).json({ message: "Email already registered." });
+    }
+
     res.status(500).json({ message: "Registration failed.", error: err.message });
   }
 });
