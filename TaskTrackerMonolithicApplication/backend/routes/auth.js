@@ -38,31 +38,69 @@ const validateLogin = [
   body("password").isString().notEmpty().withMessage("Password required."),
 ];
 
-// PUBLIC_INTERFACE
+/**
+ * Deep diagnostic registration with detailed logging for input, validation, and error flows.
+ * Logs inbound data, all validation errors, and backend pattern mismatches for diagnosis.
+ */
 router.post("/register", validateRegistration, async (req, res) => {
-  /**
-   * Registers a new user.
-   * Request: { email, password, name (optional) }
-   * Returns: JWT token and user info on success.
-   */
+  // Log inbound request body for diagnostics (in production, mask password)
+  console.log("[DIAG][REGISTER] Inbound body:", {
+    ...req.body,
+    password: req.body.password ? "***" : undefined,
+  });
+
   const errors = validationResult(req);
-  if (!errors.isEmpty())
+  if (!errors.isEmpty()) {
+    // Log express-validator errors including their params and values
+    console.warn("[DIAG][REGISTER] Express-validator errors:", errors.array());
     return res.status(400).json({ errors: errors.array() });
+  }
 
   const { email, password, name } = req.body;
 
   try {
-    const exists = await User.findOne({ email });
-    if (exists)
-      return res.status(400).json({ message: "Email already registered." });
+    // Log extracted values
+    console.log("[DIAG][REGISTER] Clean values: email=", email, "name=", name);
 
+    const exists = await User.findOne({ email });
+    if (exists) {
+      console.warn("[DIAG][REGISTER] Duplicate email detected:", email);
+      return res.status(400).json({ message: "Email already registered." });
+    }
+
+    // Defensive: Check email regex here (even if express-validator passed)
+    const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!EMAIL_REGEX.test(email)) {
+      console.error("[DIAG][REGISTER] Email failed regex pattern:", email);
+      return res.status(400).json({ message: "Email failed pattern validation." });
+    }
+
+    // Hash password (mask actual password for logs)
     const passwordHash = await bcrypt.hash(password, 10);
+
     const user = new User({
       email,
       passwordHash,
-      name: name || "",
+      name: typeof name === "string" ? name : "",
     });
-    await user.save();
+
+    // Before saving, hook into mongoose validation step
+    let saveResult, saveError;
+    try {
+      saveResult = await user.save();
+      console.log("[DIAG][REGISTER] User saved:", saveResult?._id || null);
+    } catch (saveErr) {
+      saveError = saveErr;
+      console.error("[DIAG][REGISTER] Mongoose save error:", saveErr);
+
+      if (saveErr.errors) {
+        for (const [field, suberr] of Object.entries(saveErr.errors)) {
+          console.error(`[DIAG][REGISTER] Field error [${field}]: ${suberr.message} (type=${suberr.kind}, path=${suberr.path}, value=${suberr.value})`);
+        }
+      }
+      // Bubble Mongoose validation up for standard processing below
+      throw saveErr;
+    }
 
     const token = generateToken(user);
 
@@ -76,18 +114,23 @@ router.post("/register", validateRegistration, async (req, res) => {
       token,
     });
   } catch (err) {
-    // Custom error message for Mongoose validation
+    // Field-level mongoose validation error extraction
     if (err.name === "ValidationError" && err.errors) {
-      // Aggregate all validation messages
-      const messages = Object.values(err.errors).map(e => e.message);
-      return res.status(400).json({ message: messages.join(" | ") });
+      const details = Object.entries(err.errors).map(([field, e]) =>
+        `[${field}]: ${e.message} (type=${e.kind}, path=${e.path}, value=${e.value})`
+      ).join(" | ");
+      console.error("[DIAG][REGISTER] Mongoose ValidationError:", details);
+      return res.status(400).json({ message: details });
     }
     // Duplicate key error (race condition/fallback)
     if (err.code === 11000 && err.keyPattern && err.keyPattern.email) {
+      console.warn("[DIAG][REGISTER] Duplicate key for email:", err.keyValue?.email);
       return res.status(400).json({ message: "Email already registered." });
     }
 
-    res.status(500).json({ message: "Registration failed.", error: err.message });
+    // Log all other errors (could conceal previous pattern mismatch bugs)
+    console.error("[DIAG][REGISTER] Unexpected error:", err);
+    res.status(500).json({ message: "Registration failed.", error: err.message, diag: err.stack });
   }
 });
 

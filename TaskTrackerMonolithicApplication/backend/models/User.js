@@ -16,22 +16,27 @@ const userSchema = new mongoose.Schema(
     email: {
       type: String,
       unique: true,
-      required: true,
+      required: [true, "Email is required."],
       lowercase: true,
       trim: true,
       index: true,
-      description: "User's unique email for login and communication."
+      description: "User's unique email for login and communication.",
+      match: [
+        /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+        "Email must be a valid email address (did not match pattern)."
+      ]
     },
     passwordHash: {
       type: String,
-      required: true,
+      required: [true, "PasswordHash is required."],
       description: "Bcrypt hash of the user's password."
     },
     name: {
       type: String,
       required: false,
       trim: true,
-      description: "Display name for the user."
+      description: "Display name for the user.",
+      maxlength: [100, "Name must not exceed 100 characters."]
     },
     role: {
       type: String,
