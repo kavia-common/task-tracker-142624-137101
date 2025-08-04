@@ -34,6 +34,18 @@ function authHeaders() {
   return token ? { Authorization: 'Bearer ' + token } : {};
 }
 
+/**
+ * Helper to extract the most descriptive error message(s) from backend responses.
+ */
+function extractErrorMessage(data, fallback) {
+  if (data.message) return data.message;
+  if (Array.isArray(data.errors)) {
+    // Express-validator error format: [{msg: "...", param: "...", ...}]
+    return data.errors.map(e => e.msg).join(' | ');
+  }
+  return fallback;
+}
+
 // PUBLIC_INTERFACE
 export async function apiLogin(email, password) {
   /**
@@ -46,7 +58,7 @@ export async function apiLogin(email, password) {
   });
   if (!resp.ok) {
     const data = await resp.json();
-    throw new Error(data.message || 'Login failed');
+    throw new Error(extractErrorMessage(data, 'Login failed'));
   }
   return resp.json();
 }
@@ -63,7 +75,7 @@ export async function apiRegister(email, password, name) {
   });
   if (!resp.ok) {
     const data = await resp.json();
-    throw new Error(data.message || 'Registration failed');
+    throw new Error(extractErrorMessage(data, 'Registration failed'));
   }
   return resp.json();
 }
